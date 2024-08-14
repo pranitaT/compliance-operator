@@ -374,8 +374,10 @@ func RunOperator(cmd *cobra.Command, args []string) {
 	skipMetrics, _ := flags.GetBool("skip-metrics")
 	// We only support these metrics in OpenShift (at the moment)
 	if (platform == PlatformOpenShift || platform == PlatformOpenShiftOnPower || platform == PlatformOpenShiftOnZ) && !skipMetrics {
+		setupLog.Info("Calling addMetrics function")
 		// Add the Metrics Service
 		addMetrics(ctx, cfg, kubeClient, monitoringClient)
+		setupLog.Info("addMetrics function completed")
 	}
 
 	if err := ensureDefaultProfileBundles(ctx, mgr.GetClient(), namespaceList, platform); err != nil {
@@ -431,6 +433,7 @@ func addMetrics(ctx context.Context, cfg *rest.Config, kClient *kubernetes.Clien
 	mClient *monclientv1.MonitoringV1Client) {
 	// Get the namespace the operator is currently deployed in.
 	operatorNs := common.GetComplianceOperatorNamespace()
+	setupLog.Info("Retrieved operator namespace", "namespace", operatorNs)
 
 	// Create the metrics service and make sure the service-secret is available
 	metricsService, err := ensureMetricsServiceAndSecret(ctx, kClient, operatorNs)
@@ -438,16 +441,19 @@ func addMetrics(ctx context.Context, cfg *rest.Config, kClient *kubernetes.Clien
 		setupLog.Error(err, "Error creating metrics service/secret")
 		os.Exit(1)
 	}
+	setupLog.Info("Metrics service and secret created", "service", metricsService)
 
 	if err := handleServiceMonitor(ctx, cfg, mClient, kClient, operatorNs, metricsService); err != nil {
-		log.Error(err, "Error creating ServiceMonitor")
+		setupLog.Error(err, "Error creating ServiceMonitor")
 		os.Exit(1)
 	}
+	setupLog.Info("ServiceMonitor created successfully", "service", metricsService)
 
 	if err := createNonComplianceAlert(ctx, mClient, operatorNs); err != nil {
 		setupLog.Error(err, "Error creating PrometheusRule")
 		os.Exit(1)
 	}
+	setupLog.Info("PrometheusRule created successfully", "namespace", operatorNs)
 }
 
 func operatorMetricService(ns string) *v1.Service {
