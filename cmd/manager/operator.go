@@ -209,6 +209,7 @@ func RunOperator(cmd *cobra.Command, args []string) {
 
 	printVersion()
 
+	setupLog.Debug("Retrieving watch namespace")
 	namespace, err := common.GetWatchNamespace()
 	if err != nil {
 		setupLog.Error(err, "Failed to get watch namespace")
@@ -235,6 +236,7 @@ func RunOperator(cmd *cobra.Command, args []string) {
 
 	if namespace != "" {
 		namespaceList = strings.Split(namespace, ",")
+		setupLog.Debug("Namespace list parsed", "namespaces", namespaceList)
 		// Add support for MultiNamespace set in WATCH_NAMESPACE (e.g ns1,ns2)
 		// Note that this is not intended to be used for excluding namespaces, this is better done via a Predicate
 		// Also note that you may face performance issues when using this with a high number of namespaces.
@@ -243,17 +245,20 @@ func RunOperator(cmd *cobra.Command, args []string) {
 			// These are not applied because of the non-use of the `options` variable, so multi-namespace is probably non-functional.
 			for _, ns := range namespaceList {
 				options.Cache.DefaultNamespaces[ns] = cache.Config{}
+				setupLog.Debug("Namespace added to cache options", "namespace", ns)
 			}
 		}
 	} else {
 		// NOTE(jaosorior): This will be used to set up the needed defaults
 		namespaceList = []string{common.GetComplianceOperatorNamespace()}
+		setupLog.Debug("Default namespace list", "namespaces", namespaceList)
 	}
 
 	// Get a config to talk to the apiserver
+	setupLog.Debug("Getting Kubernetes config")
 	cfg, err := config.GetConfig()
 	if err != nil {
-		setupLog.Error(err, "")
+		setupLog.Error(err, "Failed to get Kubernetes config")
 		os.Exit(1)
 	}
 
@@ -269,6 +274,7 @@ func RunOperator(cmd *cobra.Command, args []string) {
 		TLSOpts: []func(config *tls.Config){disableHTTP2},
 	}
 
+	setupLog.Debug("Creating manager")
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Cache:                  c,
 		Scheme:                 operatorScheme,
@@ -295,21 +301,23 @@ func RunOperator(cmd *cobra.Command, args []string) {
 
 	mgrscheme := mgr.GetScheme()
 	// Setup Scheme for all resources
+	setupLog.Debug("Adding APIs to scheme")
 	if err := apis.AddToScheme(mgrscheme); err != nil {
-		setupLog.Error(err, "")
+		setupLog.Error(err, "Failed to add APIs to scheme")
 		os.Exit(1)
 	}
 	if err := mcfgapi.Install(mgrscheme); err != nil {
-		setupLog.Error(err, "")
+		setupLog.Error(err, "Failed to install MCO API")
 		os.Exit(1)
 	}
 
 	if err := ocpapi.Install(mgrscheme); err != nil {
 		setupLog.Info("Couldn't install OCP API. This is not fatal though.")
-		setupLog.Error(err, "")
+		setupLog.Error(err, "Failed to install OCP API")
 	}
 
 	// Index the ID field of Checks
+	setupLog.Debug("Indexing ComplianceCheckResult ID field")
 	if err := mgr.GetFieldIndexer().IndexField(ctx, &compv1alpha1.ComplianceCheckResult{}, compv1alpha1.ComplianceRemediationDependencyField, func(rawObj client.Object) []string {
 		check, ok := rawObj.(*compv1alpha1.ComplianceCheckResult)
 		if !ok {
@@ -322,11 +330,13 @@ func RunOperator(cmd *cobra.Command, args []string) {
 	}
 
 	met := ctrlMetrics.New()
+	setupLog.Debug("Registering metrics")
 	if err := met.Register(); err != nil {
 		setupLog.Error(err, "Error registering metrics")
 		os.Exit(1)
 	}
 
+	setupLog.Debug("Getting scheduling info")
 	si, getSIErr := getSchedulingInfo(ctx, mgr.GetAPIReader())
 	if getSIErr != nil {
 		setupLog.Error(getSIErr, "Getting control plane scheduling info")
@@ -334,32 +344,36 @@ func RunOperator(cmd *cobra.Command, args []string) {
 	}
 
 	// Setup all Controllers
+	setupLog.Debug("Adding controllers to manager")
 	if err := controller.AddToManager(mgr, met, si, kubeClient); err != nil {
-		setupLog.Error(err, "")
+		setupLog.Error(err, "Error adding controllers to manager")
 		os.Exit(1)
 	}
 
 	infra := &configv1.Infrastructure{}
+	setupLog.Debug("Retrieving infrastructure")
 	if err := kubeClient.RESTClient().Get().RequestURI("/apis/config.openshift.io/v1/infrastructures/cluster").Do(ctx).Into(infra); err != nil {
 		setupLog.Info("Couldn't get Infrastructure. This is not fatal though.")
-		setupLog.Error(err, "")
+		setupLog.Error(err, "Failed to get Infrastructure")
 	} else {
 		// Set environment variables for the controlPlaneTopology
+		setupLog.Debug("Setting CONTROL_PLANE_TOPOLOGY environment variable")
 		os.Setenv("CONTROL_PLANE_TOPOLOGY", string(infra.Status.ControlPlaneTopology))
 	}
 
 	// We need to set PLATFORM env var if the PLATFORM flag is set
 	pflag := os.Getenv("PLATFORM")
 	if pflag == "" {
+		setupLog.Debug("PLATFORM environment variable is not set")
 		clusterClaim := &clusterv1alpha1.ClusterClaim{}
 		if err := kubeClient.RESTClient().Get().RequestURI("/apis/cluster.open-cluster-management.io/v1alpha1/clusterclaims/product.open-cluster-management.io").Do(ctx).Into(clusterClaim); err != nil {
-			setupLog.Info("Couldn't get ClusterClaim. This is not fatal though.")
-			setupLog.Error(err, "")
+			setupLog.Error(err, "Couldn't get ClusterClaim. Full error response: ", err.Error())
 		} else {
 			// check the value of the clusterClaim
 			if clusterClaim.Spec.Value != "" {
 				pflag = clusterClaim.Spec.Value
 				os.Setenv("PLATFORM", pflag)
+				setupLog.Debug("Set PLATFORM environment variable from ClusterClaim")
 			}
 		}
 	}
@@ -367,9 +381,11 @@ func RunOperator(cmd *cobra.Command, args []string) {
 	if pflag == "" {
 		pflag, _ = flags.GetString("platform")
 		os.Setenv("PLATFORM", pflag)
+		setupLog.Debug("Set PLATFORM environment variable from command line flag")
 	}
 
 	platform := getValidPlatform(pflag)
+	setupLog.Debug("Valid platform determined", "platform", platform)
 
 	skipMetrics, _ := flags.GetBool("skip-metrics")
 	// We only support these metrics in OpenShift (at the moment)
@@ -380,11 +396,13 @@ func RunOperator(cmd *cobra.Command, args []string) {
 		setupLog.Info("addMetrics function completed")
 	}
 
+	setupLog.Debug("Ensuring default ProfileBundles")
 	if err := ensureDefaultProfileBundles(ctx, mgr.GetClient(), namespaceList, platform); err != nil {
 		setupLog.Error(err, "Error creating default ProfileBundles.")
 		os.Exit(1)
 	}
 
+	setupLog.Debug("Ensuring default ScanSettings")
 	if err := ensureDefaultScanSettings(ctx, mgr.GetClient(), namespaceList, platform, si); err != nil {
 		setupLog.Error(err, "Error creating default ScanSettings.")
 		os.Exit(1)
