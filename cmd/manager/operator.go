@@ -389,11 +389,11 @@ func RunOperator(cmd *cobra.Command, args []string) {
 
 	skipMetrics, _ := flags.GetBool("skip-metrics")
 
-	setupLog.Info("skipMetrics: ", skipMetrics)
-	setupLog.Info("platform: ", platform)
-	setupLog.Info("PlatformOpenShift: ", PlatformOpenShift)
-	setupLog.Info("PlatformOpenShiftOnPower: ", PlatformOpenShiftOnPower)
-	setupLog.Info("PlatformOpenShiftOnZ: ", PlatformOpenShiftOnZ)
+	setupLog.Info("RunOperator", "skipMetrics: ", skipMetrics)
+	setupLog.Info("RunOperator", "platform: ", platform)
+	setupLog.Info("RunOperator", "PlatformOpenShift: ", PlatformOpenShift)
+	setupLog.Info("RunOperator", "PlatformOpenShiftOnPower: ", PlatformOpenShiftOnPower)
+	setupLog.Info("RunOperator", "PlatformOpenShiftOnZ: ", PlatformOpenShiftOnZ)
 	// We only support these metrics in OpenShift (at the moment)
 	if (platform == PlatformOpenShift || platform == PlatformOpenShiftOnPower || platform == PlatformOpenShiftOnZ) && !skipMetrics {
 		setupLog.Info("Calling addMetrics function")
