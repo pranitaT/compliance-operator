@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-logr/logr"
 	libgocrypto "github.com/openshift/library-go/pkg/crypto"
+	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
@@ -142,7 +143,9 @@ func (m *Metrics) Register() error {
 		metricNameComplianceStateGauge:        m.metrics.metricComplianceStateGauge,
 	} {
 		m.log.Info(fmt.Sprintf("Registering metric: %s", name))
-		prometheus.MustRegister(collector) // Using MustRegister to ensure the metric is registered
+		if err := m.impl.Register(collector); err != nil {
+			return errors.Wrapf(err, "register collector for %s metric", name)
+		}
 	}
 	return nil
 }
