@@ -356,6 +356,10 @@ func RunOperator(cmd *cobra.Command, args []string) {
 
 	// Setup all Controllers
 	setupLog.Info("Adding controllers to manager")
+	setupLog.Info("RunOperator", "mgr", mgr)
+	setupLog.Info("RunOperator", "met", met)
+	setupLog.Info("RunOperator", "si", si)
+	setupLog.Info("RunOperator", "kubeClient", kubeClient)
 	if err := controller.AddToManager(mgr, met, si, kubeClient); err != nil {
 		setupLog.Error(err, "Error adding controllers to manager")
 		os.Exit(1)

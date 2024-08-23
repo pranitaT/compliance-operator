@@ -18,6 +18,10 @@ func AddToManager(m manager.Manager,
 	kubeClient *kubernetes.Clientset,
 ) error {
 	setupLog := ctrl.Log.WithName("controller").WithName("AddToManager")
+	setupLog.Info("AddToManagerFuncs", "m", m)
+	setupLog.Info("AddToManagerFuncs", "met", met)
+	setupLog.Info("AddToManagerFuncs", "si", si)
+	setupLog.Info("AddToManagerFuncs", "kubeClient", kubeClient)
 
 	// Add metrics Startup to the manager
 	setupLog.Info("Adding metrics to manager")
@@ -30,12 +34,11 @@ func AddToManager(m manager.Manager,
 	// Add controllers to manager
 	setupLog.Info("Adding controllers to manager")
 	for _, f := range AddToManagerFuncs {
-		setupLog.Info("Invoking AddToManager function", "function", f)
 		if err := f(m, met, si, kubeClient); err != nil {
-			setupLog.Error(err, "Failed to add controller to manager", "function", f)
+			setupLog.Error(err, "Failed to add controller to manager", "function", err)
 			return err
 		}
-		setupLog.Info("Controller added to manager successfully", "function", f)
+		setupLog.Info("Controller added to manager successfully")
 	}
 
 	return nil
