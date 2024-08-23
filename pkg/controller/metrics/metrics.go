@@ -8,7 +8,6 @@ import (
 
 	"github.com/go-logr/logr"
 	libgocrypto "github.com/openshift/library-go/pkg/crypto"
-	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
@@ -60,48 +59,64 @@ type ControllerMetrics struct {
 }
 
 func DefaultControllerMetrics() *ControllerMetrics {
+	log := ctrllog.Log.WithName("DefaultControllerMetrics")
+	log.Info("Initializing default controller metrics")
+
+	log.Info("Creating metricComplianceScanError")
+	metricComplianceScanError := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name:      metricNameComplianceScanError,
+			Namespace: metricNamespace,
+			Help:      "A counter for the total number of errors for a particular scan",
+		},
+		[]string{metricLabelScanName},
+	)
+
+	log.Info("Creating metricComplianceScanStatus")
+	metricComplianceScanStatus := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name:      metricNameComplianceScanStatus,
+			Namespace: metricNamespace,
+			Help:      "A counter for the total number of updates to the status of a ComplianceScan",
+		},
+		[]string{
+			metricLabelScanName,
+			metricLabelScanPhase,
+			metricLabelScanResult,
+		},
+	)
+
+	log.Info("Creating metricComplianceRemediationStatus")
+	metricComplianceRemediationStatus := prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name:      metricNameComplianceRemediationStatus,
+			Namespace: metricNamespace,
+			Help:      "A counter for the total number of updates to the status of a ComplianceRemediation",
+		},
+		[]string{
+			metricLabelRemediationName,
+			metricLabelRemediationState,
+		},
+	)
+
+	log.Info("Creating metricComplianceStateGauge")
+	metricComplianceStateGauge := prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name:      metricNameComplianceStateGauge,
+			Namespace: metricNamespace,
+			Help:      "A gauge for the compliance state of a ComplianceSuite. Set to 0 when COMPLIANT, 1 when NON-COMPLIANT, 2 when INCONSISTENT, and 3 when ERROR",
+		},
+		[]string{
+			metricLabelSuiteName,
+		},
+	)
+
+	log.Info("Default controller metrics initialization complete")
 	return &ControllerMetrics{
-		metricComplianceScanError: prometheus.NewCounterVec(
-			prometheus.CounterOpts{
-				Name:      metricNameComplianceScanError,
-				Namespace: metricNamespace,
-				Help:      "A counter for the total number of errors for a particular scan",
-			},
-			[]string{metricLabelScanName},
-		),
-		metricComplianceScanStatus: prometheus.NewCounterVec(
-			prometheus.CounterOpts{
-				Name:      metricNameComplianceScanStatus,
-				Namespace: metricNamespace,
-				Help:      "A counter for the total number of updates to the status of a ComplianceScan",
-			},
-			[]string{
-				metricLabelScanName,
-				metricLabelScanPhase,
-				metricLabelScanResult,
-			},
-		),
-		metricComplianceRemediationStatus: prometheus.NewCounterVec(
-			prometheus.CounterOpts{
-				Name:      metricNameComplianceRemediationStatus,
-				Namespace: metricNamespace,
-				Help:      "A counter for the total number of updates to the status of a ComplianceRemediation",
-			},
-			[]string{
-				metricLabelRemediationName,
-				metricLabelRemediationState,
-			},
-		),
-		metricComplianceStateGauge: prometheus.NewGaugeVec(
-			prometheus.GaugeOpts{
-				Name:      metricNameComplianceStateGauge,
-				Namespace: metricNamespace,
-				Help:      "A gauge for the compliance state of a ComplianceSuite. Set to 0 when COMPLIANT, 1 when NON-COMPLIANT, 2 when INCONSISTENT, and 3 when ERROR",
-			},
-			[]string{
-				metricLabelSuiteName,
-			},
-		),
+		metricComplianceScanError:         metricComplianceScanError,
+		metricComplianceScanStatus:        metricComplianceScanStatus,
+		metricComplianceRemediationStatus: metricComplianceRemediationStatus,
+		metricComplianceStateGauge:        metricComplianceStateGauge,
 	}
 }
 
@@ -127,9 +142,7 @@ func (m *Metrics) Register() error {
 		metricNameComplianceStateGauge:        m.metrics.metricComplianceStateGauge,
 	} {
 		m.log.Info(fmt.Sprintf("Registering metric: %s", name))
-		if err := m.impl.Register(collector); err != nil {
-			return errors.Wrapf(err, "register collector for %s metric", name)
-		}
+		prometheus.MustRegister(collector) // Using MustRegister to ensure the metric is registered
 	}
 	return nil
 }

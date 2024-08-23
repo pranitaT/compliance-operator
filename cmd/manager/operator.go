@@ -321,27 +321,38 @@ func RunOperator(cmd *cobra.Command, args []string) {
 	if err := mgr.GetFieldIndexer().IndexField(ctx, &compv1alpha1.ComplianceCheckResult{}, compv1alpha1.ComplianceRemediationDependencyField, func(rawObj client.Object) []string {
 		check, ok := rawObj.(*compv1alpha1.ComplianceCheckResult)
 		if !ok {
+			setupLog.Info("Object type assertion failed, returning empty list")
 			return []string{}
 		}
+		setupLog.Info("Indexing ComplianceCheckResult with ID", "ID", check.ID)
 		return []string{check.ID}
 	}); err != nil {
 		setupLog.Error(err, "Error indexing the ID field of ComplianceCheckResult")
 		os.Exit(1)
 	}
 
+	setupLog.Info("Creating metrics object")
 	met := ctrlMetrics.New()
+	if err != nil {
+		setupLog.Error(err, "Failed to create metrics object")
+		os.Exit(1)
+	}
+	setupLog.Info("Metrics object created successfully")
+
 	setupLog.Info("Registering metrics")
 	if err := met.Register(); err != nil {
 		setupLog.Error(err, "Error registering metrics")
 		os.Exit(1)
 	}
+	setupLog.Info("Metrics registered successfully")
 
 	setupLog.Info("Getting scheduling info")
 	si, getSIErr := getSchedulingInfo(ctx, mgr.GetAPIReader())
 	if getSIErr != nil {
-		setupLog.Error(getSIErr, "Getting control plane scheduling info")
+		setupLog.Error(getSIErr, "Error getting control plane scheduling info")
 		os.Exit(1)
 	}
+	setupLog.Info("Control plane scheduling info retrieved")
 
 	// Setup all Controllers
 	setupLog.Info("Adding controllers to manager")
@@ -349,6 +360,7 @@ func RunOperator(cmd *cobra.Command, args []string) {
 		setupLog.Error(err, "Error adding controllers to manager")
 		os.Exit(1)
 	}
+	setupLog.Info("Controllers added to manager successfully")
 
 	infra := &configv1.Infrastructure{}
 	setupLog.Info("Retrieving infrastructure")
@@ -357,7 +369,7 @@ func RunOperator(cmd *cobra.Command, args []string) {
 		setupLog.Error(err, "Failed to get Infrastructure")
 	} else {
 		// Set environment variables for the controlPlaneTopology
-		setupLog.Info("Setting CONTROL_PLANE_TOPOLOGY environment variable")
+		setupLog.Info("Setting CONTROL_PLANE_TOPOLOGY environment variable", "ControlPlaneTopology", infra.Status.ControlPlaneTopology)
 		os.Setenv("CONTROL_PLANE_TOPOLOGY", string(infra.Status.ControlPlaneTopology))
 	}
 
