@@ -49,6 +49,7 @@ const (
 type Metrics struct {
 	impl    impl
 	log     logr.Logger
+	registry *prometheus.Registry
 	metrics *ControllerMetrics
 }
 
@@ -57,6 +58,19 @@ type ControllerMetrics struct {
 	metricComplianceScanStatus        *prometheus.CounterVec
 	metricComplianceRemediationStatus *prometheus.CounterVec
 	metricComplianceStateGauge        *prometheus.GaugeVec
+}
+
+func init() {
+	log := ctrllog.Log.WithName("init")
+
+	// Create a new instance of Metrics with default implementation
+	metrics := New() 
+
+	// Register compliance metrics with Prometheus
+	if err := metrics.Register(); err != nil {
+		log.Error(err, "Failed to register metrics")
+		return
+	}
 }
 
 func DefaultControllerMetrics() *ControllerMetrics {
@@ -122,9 +136,12 @@ func DefaultControllerMetrics() *ControllerMetrics {
 }
 
 func NewMetrics(imp impl) *Metrics {
+	registry := prometheus.NewRegistry()
+
 	return &Metrics{
 		impl:    imp,
 		log:     ctrllog.Log.WithName("metrics"),
+		registry: registry,
 		metrics: DefaultControllerMetrics(),
 	}
 }
@@ -144,7 +161,7 @@ func (m *Metrics) Register() error {
 	} {
 		m.log.Info(fmt.Sprintf("Attempting to register metric name: %s", name))
 		m.log.Info(fmt.Sprintf("Attempting to register metric collector: %s", collector))
-		if err := m.impl.Register(collector); err != nil {
+		if err := m.registry.Register(collector); err != nil {
 			m.log.Error(err, fmt.Sprintf("Failed to register metric: %s", name))
 			return errors.Wrapf(err, "register collector for %s metric", name)
 		}
@@ -155,7 +172,7 @@ func (m *Metrics) Register() error {
 
 func (m *Metrics) Start(ctx context.Context) error {
 	m.log.Info("Starting to serve controller metrics")
-	http.Handle(HandlerPath, promhttp.Handler())
+	http.Handle(HandlerPath, promhttp.HandlerFor(m.registry, promhttp.HandlerOpts{}))
 
 	tlsConfig := &tls.Config{
 		MinVersion: tls.VersionTLS12,

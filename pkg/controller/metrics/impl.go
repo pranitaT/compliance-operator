@@ -20,13 +20,17 @@ type impl interface {
 
 func (d *defaultImpl) Register(c prometheus.Collector) error {
 	log.Printf("Attempting to register metric: %s", c)
-	err := prometheus.Register(c)
-	if err != nil {
-		log.Printf("Failed to register metric: %s, error: %v", c, err)
-	} else {
-		log.Printf("Successfully registered metric: %s", c)
-	}
-	return err
+	prometheus.MustRegister(c)
+	prometheus.NewRegistry().MustRegister(c)
+	// err := prometheus.Register(c)
+	// if err != nil {
+	// 	log.Printf("Failed to register metric: %s, error: %v", c, err)
+	// } else {
+	// 	log.Printf("Successfully registered metric: %s", c)
+	// }
+	// return err
+	log.Printf("Successfully registered metric: %s", c)
+	return nil
 }
 
 func (d *defaultImpl) ListenAndServe(addr string, handler http.Handler) error {
