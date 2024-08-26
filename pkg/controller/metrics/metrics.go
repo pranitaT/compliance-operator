@@ -142,10 +142,13 @@ func (m *Metrics) Register() error {
 		metricNameComplianceRemediationStatus: m.metrics.metricComplianceRemediationStatus,
 		metricNameComplianceStateGauge:        m.metrics.metricComplianceStateGauge,
 	} {
-		m.log.Info(fmt.Sprintf("Registering metric: %s", name))
+		m.log.Info(fmt.Sprintf("Attempting to register metric name: %s", name))
+		m.log.Info(fmt.Sprintf("Attempting to register metric collector: %s", collector))
 		if err := m.impl.Register(collector); err != nil {
+			m.log.Error(err, fmt.Sprintf("Failed to register metric: %s", name))
 			return errors.Wrapf(err, "register collector for %s metric", name)
 		}
+		m.log.Info(fmt.Sprintf("Successfully registered metric: %s", name))
 	}
 	return nil
 }

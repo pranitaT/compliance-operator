@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -18,9 +19,23 @@ type impl interface {
 }
 
 func (d *defaultImpl) Register(c prometheus.Collector) error {
-	return prometheus.Register(c)
+	log.Printf("Attempting to register metric: %s", c)
+	err := prometheus.Register(c)
+	if err != nil {
+		log.Printf("Failed to register metric: %s, error: %v", c, err)
+	} else {
+		log.Printf("Successfully registered metric: %s", c)
+	}
+	return err
 }
 
 func (d *defaultImpl) ListenAndServe(addr string, handler http.Handler) error {
-	return http.ListenAndServe(addr, handler)
+	log.Printf("Starting HTTP server on %s", addr)
+	err := http.ListenAndServe(addr, handler)
+	if err != nil {
+		log.Printf("Failed to start HTTP server on %s, error: %v", addr, err)
+	} else {
+		log.Printf("HTTP server started successfully on %s", addr)
+	}
+	return err
 }
