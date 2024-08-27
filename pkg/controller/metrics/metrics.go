@@ -171,25 +171,38 @@ func (m *Metrics) Register() error {
 }
 
 func (m *Metrics) Start(ctx context.Context) error {
-	m.log.Info("Starting to serve controller metrics")
-	http.Handle(HandlerPath, promhttp.HandlerFor(m.registry, promhttp.HandlerOpts{}))
+    m.log.Info("Starting to serve controller metrics")
 
-	tlsConfig := &tls.Config{
-		MinVersion: tls.VersionTLS12,
-		NextProtos: []string{"http/1.1"},
-	}
-	tlsConfig = libgocrypto.SecureTLSConfig(tlsConfig)
-	server := &http.Server{
-		Addr:      MetricsAddrListen,
-		TLSConfig: tlsConfig,
-	}
+    // Create a new registry and register metrics
+    reg := prometheus.NewRegistry()
+    reg.Register(DefaultControllerMetrics().metricComplianceScanError)
+    reg.Register(DefaultControllerMetrics().metricComplianceScanStatus)
+    reg.Register(DefaultControllerMetrics().metricComplianceRemediationStatus)
+    reg.Register(DefaultControllerMetrics().metricComplianceStateGauge)
 
-	err := server.ListenAndServeTLS("/var/run/secrets/serving-cert/tls.crt", "/var/run/secrets/serving-cert/tls.key")
-	if err != nil {
-		// unhandled on purpose, we don't want to exit the operator.
-		m.log.Error(err, "Metrics service failed")
-	}
-	return nil
+    // Setup HTTP handler to serve metrics
+    http.Handle(HandlerPath, promhttp.HandlerFor(reg, promhttp.HandlerOpts{}))
+
+    // Configure TLS
+    tlsConfig := &tls.Config{
+        MinVersion: tls.VersionTLS12,
+        NextProtos: []string{"http/1.1"},
+    }
+    tlsConfig = libgocrypto.SecureTLSConfig(tlsConfig)
+
+    // Start the HTTP server
+    server := &http.Server{
+        Addr:      MetricsAddrListen,
+        TLSConfig: tlsConfig,
+    }
+
+    // Listen and serve with TLS
+    err := server.ListenAndServeTLS("/var/run/secrets/serving-cert/tls.crt", "/var/run/secrets/serving-cert/tls.key")
+    if err != nil {
+        // Log error if the server fails to start, but don't exit the operator
+        m.log.Error(err, "Metrics service failed")
+    }
+    return nil
 }
 
 // IncComplianceScanStatus also increments error if necessary
